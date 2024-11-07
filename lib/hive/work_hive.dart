@@ -8,13 +8,13 @@ class Work extends HiveObject {
   int id = 0;
 
   @HiveField(1)
-  String title = "";
+  String title;
 
   @HiveField(2)
-  String detail = "";
+  String detail;
 
   @HiveField(3)
-  String? schedule = "";
+  String? schedule;
 
   @HiveField(4)
   bool? haveNotice;
@@ -22,11 +22,12 @@ class Work extends HiveObject {
   @HiveField(5)
   DateTime? timeCreate;
 
-  Work(
-      {required this.id,
+  Work({
+    required this.id,
       required this.title,
       required this.detail,
       required this.schedule,
       this.haveNotice = false,
-      required this.timeCreate});
+      required this.timeCreate
+  });
 }

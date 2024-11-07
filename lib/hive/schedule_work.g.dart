@@ -17,18 +17,21 @@ class ScheduleWorkAdapter extends TypeAdapter<ScheduleWork> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return ScheduleWork(
-      dateTime: fields[0] as DateTime?,
-      works: (fields[1] as List?)?.cast<Work>(),
+      id: fields[0] as int,
+      dateTime: fields[1] as DateTime,
+      works: (fields[2] as List).cast<Work>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, ScheduleWork obj) {
     writer
-      ..writeByte(2)
+      ..writeByte(3)
       ..writeByte(0)
-      ..write(obj.dateTime)
+      ..write(obj.id)
       ..writeByte(1)
+      ..write(obj.dateTime)
+      ..writeByte(2)
       ..write(obj.works);
   }
 

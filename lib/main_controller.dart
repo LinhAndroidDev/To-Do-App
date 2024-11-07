@@ -1,32 +1,46 @@
 
+import 'package:collection/collection.dart';
 import 'package:diacritic/diacritic.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
+import 'package:to_do_app/date_utils.dart';
 import 'package:to_do_app/hive/schedule_work.dart';
 import 'package:to_do_app/hive/work_hive.dart';
-import 'package:to_do_app/model/time_work.dart';
 import 'package:to_do_app/sharepreference.dart';
 
+import 'hive/hive_gen_id.dart';
+
 class MainController extends GetxController {
-  late Box<Work> box;
-  late Box<ScheduleWork> boxSchedule;
+  final boxSchedule = Hive.box<ScheduleWork>('schedule');
   var works = <Work>[];
   var time = ''.obs;
   var imageAvatar = ''.obs;
   var filteredItems = <Work>[].obs;
-  var timeWorks = <TimeWork>[];
-  var indexSelectedTime = 0.obs;
+  var timeWorks = <DateTime>[];
+  var dateTimeCurrent = DateTime.now().obs;
 
   @override
   Future<void> onInit() async {
     super.onInit();
     imageAvatar.value = await SharePreferData.loadAvatar();
     getSevenDays();
-    box = await Hive.openBox<Work>('work');
-    boxSchedule = await Hive.openBox<ScheduleWork>('schedule');
-    getWorks();
+    await getScheduleWork();
+  }
+
+  @override
+  void dispose() {
+    Hive.box('schedule').close();// Đóng tất cả các hộp
+    super.dispose();
+  }
+
+  /// Add Schedule Work to Hive
+  Future<void> getScheduleWork() async {
+    final schedule = boxSchedule.values.firstWhereOrNull(
+            (schedule) => compareDay(schedule.dateTime, dateTimeCurrent.value));
+    works = schedule?.works ?? [];
+    filteredItems.value = works;
+    filteredItems.refresh();
   }
 
   /// Add Schedule Work to Hive
@@ -34,34 +48,55 @@ class MainController extends GetxController {
     await boxSchedule.add(scheduleWork);
   }
 
-  /// Add work to Hive
-  Future<void> addWork(Work work) async {
-    await box.add(work);
-    filteredItems.add(work);
-    works = filteredItems;
+  /// Add Work to Schedule
+  Future<void> addWorkToSchedule(Work work) async {
+    // Tìm ScheduleWork của ngày hiện tại
+    var scheduleWork = boxSchedule.values.firstWhereOrNull(
+          (schedule) => compareDay(schedule.dateTime, dateTimeCurrent.value),
+    );
+
+    if (scheduleWork != null) {
+      scheduleWork.works.add(work);
+      scheduleWork.save();
+    } else {
+      final id = await HiveIdGenerator.getScheduleWorkId();
+      await addScheduleWork(ScheduleWork(
+          id: id, dateTime: dateTimeCurrent.value, works: [work]));
+    }
+
+    await getScheduleWork();
   }
 
-  /// Get all works from Hive
-  Future<void> getWorks() async {
-    works = box.values.toList();
-    filteredItems.value = works;
+  /// Update Work to Schedule
+  Future<void> updateWorkToSchedule(int index, Work work) async {
+    ScheduleWork schedule = boxSchedule.values.firstWhere(
+        (element) => element.dateTime == dateTimeCurrent.value,
+        orElse: () => ScheduleWork(id: -1, dateTime: DateTime.now(), works: []));
+
+    if (schedule.id != -1) {
+      schedule.works[index] = work;
+      await boxSchedule.put(schedule.key, schedule);
+    } else {
+      print('Fail Update');
+    }
+
+    await getScheduleWork();
   }
 
-  /// Update work in Hive
-  Future<void> updateWork(int index, Work work) async {
-    int position = works.indexWhere((element) => element.id == filteredItems[index].id);
-    await box.putAt(position, work);
-    filteredItems[index] = work;
-    update(); // Gọi để cập nhật UI nếu cần
-    works = box.values.toList();
-  }
+  /// Delete Work to Schedule
+  Future<void> deleteWorkToSchedule(int index) async {
+    ScheduleWork schedule = boxSchedule.values.firstWhere(
+        (element) => element.dateTime == dateTimeCurrent.value,
+        orElse: () => ScheduleWork(id: -1, dateTime: DateTime.now(), works: []));
 
-  /// Delete work in Hive
-  Future<void> deleteWork(int index) async {
-    int position = works.indexWhere((element) => element.id == filteredItems[index].id);
-    await box.deleteAt(position);
-    filteredItems.removeAt(index);
-    works = box.values.toList();
+    if (schedule.id != -1) {
+      schedule.works.removeAt(index);
+      await boxSchedule.put(schedule.key, schedule);
+    } else {
+      print('Fail Delete');
+    }
+
+    await getScheduleWork();
   }
 
   /// Turn on/off notification
@@ -69,8 +104,8 @@ class MainController extends GetxController {
     work.haveNotice = work.haveNotice == true ? false : true;
     filteredItems[index] = work;
     int position = works.indexWhere((element) => element.id == filteredItems[index].id);
-    await updateWork(position, work);
-    works = box.values.toList();
+    await updateWorkToSchedule(position, work);
+    // works = box.values.toList();
   }
 
   /// Take Image From Gallery
@@ -104,16 +139,28 @@ class MainController extends GetxController {
             .toList();
   }
 
-  ///Get List Of 7 Consecutive Days From Current Date
+  /// Get List Of 7 Consecutive Days From Current Date
   Future<void> getSevenDays() async {
     DateTime today = DateTime.now();
-    List<TimeWork> timeWorks = [];
+    dateTimeCurrent.value = today;
+    List<DateTime> timeWorks = [];
 
     // Sử dụng vòng lặp để thêm các ngày liên tiếp vào danh sách
     for (int i = 0; i < 7; i++) {
       DateTime day = today.add(Duration(days: i));
-      timeWorks.add(TimeWork(day: day.day, dayOfWeek: DateFormat('E').format(day)));
+      timeWorks.add(day);
     }
     this.timeWorks = timeWorks;
+  }
+
+  /// Check if Time is Selected
+  bool isTimeSelected({required int index}) {
+    return dateTimeCurrent.value == timeWorks[index];
+  }
+
+  /// Select Time
+  void selectTime({required int index}) {
+    dateTimeCurrent.value = timeWorks[index];
+    getScheduleWork();
   }
 }

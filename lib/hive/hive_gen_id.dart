@@ -8,4 +8,12 @@ class HiveIdGenerator {
     await idBox.put('id', currentId);
     return currentId;
   }
+
+  static Future<int> getScheduleWorkId() async {
+    final idBox = await Hive.openBox<int>('scheduleWorkId');
+    int currentId = idBox.get('scheduleId', defaultValue: 0)!;
+    currentId += 1;
+    await idBox.put('scheduleId', currentId);
+    return currentId;
+  }
 }

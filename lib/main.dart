@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/adapters.dart';
+import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:to_do_app/color_name.dart';
+import 'package:to_do_app/custom_view/bottom_sheet_take_photo.dart';
 import 'package:to_do_app/custom_view/custom_dialog_create.dart';
 import 'package:to_do_app/custom_view/custom_search_view.dart';
 import 'package:to_do_app/local_notification.dart';
@@ -18,13 +20,13 @@ import 'hive/work_hive.dart';
 import 'main_controller.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   await Hive.initFlutter();
-  Hive.registerAdapter(WorkAdapter()); // Đăng ký adapter
-  Hive.registerAdapter(ScheduleWorkAdapter()); // Đăng ký adapter
-  await Hive.openBox<Work>('work');
+  Hive.registerAdapter(WorkAdapter());
+  Hive.registerAdapter(ScheduleWorkAdapter());
   await Hive.openBox<ScheduleWork>('schedule');
 
-  WidgetsFlutterBinding.ensureInitialized();
   await LocalNotification.init();
   await AndroidAlarmManager.initialize();
 
@@ -42,6 +44,7 @@ void main() async {
   runApp(MyApp());
 }
 
+/// Handle Event Notification For Alarm
 void scheduleDailyNotification({required Work work}) async {
   final time = stringToTimeOfDay(work.schedule ?? '');
 
@@ -85,7 +88,11 @@ class MyApp extends StatelessWidget {
             Obx(
               () => InkWell(
                 onTap: () {
-                  Get.bottomSheet(_builderBottomSheet(context),
+                  Get.bottomSheet(
+                      BottomSheetTakePhoto(
+                          onPickGallery: (value) => value
+                              ? controller.pickImage()
+                              : controller.pickCamera()),
                       isDismissible: true);
                 },
                 child: viewAvatar(),
@@ -97,8 +104,8 @@ class MyApp extends StatelessWidget {
         body: contentView(),
         floatingActionButton: FloatingActionButton(
           onPressed: () {
-            Get.dialog(DialogCustomCreateWork(onClickCreate: (work) {
-              controller.addWork(work);
+            Get.dialog(DialogCustomCreateWork(onClickCreate: (work) async {
+              controller.addWorkToSchedule(work);
             }));
           },
           child: const Icon(Icons.add),
@@ -154,17 +161,18 @@ class MyApp extends StatelessWidget {
         ),
         InkWell(
           onTap: () {
-            controller.indexSelectedTime.value = index;
+            controller.selectTime(index: index);
           },
           child: Obx(() => Container(
             width: controller.timeWorks.isNotEmpty ? 60 : 0,
             height: controller.timeWorks.isNotEmpty ? 60 : 0,
             decoration: BoxDecoration(
-              color:
-              (index == controller.indexSelectedTime.value) ? ColorName.blue : ColorName.white,
+              color: controller.isTimeSelected(index: index)
+                      ? ColorName.blue
+                      : ColorName.white,
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
-                (index == controller.indexSelectedTime.value)
+                controller.isTimeSelected(index: index)
                     ? const BoxShadow(
                   color: ColorName.greyDark,
                   blurRadius: 5,
@@ -180,7 +188,7 @@ class MyApp extends StatelessWidget {
                   controller.timeWorks[index].day.toString(),
                   style: TextStyle(
                       fontSize: 16,
-                      color: (index == controller.indexSelectedTime.value)
+                      color: controller.isTimeSelected(index: index)
                           ? ColorName.white
                           : ColorName.black,
                       fontWeight: FontWeight.w700),
@@ -189,10 +197,10 @@ class MyApp extends StatelessWidget {
                   height: 3,
                 ),
                 Text(
-                  controller.timeWorks[index].dayOfWeek,
+                  DateFormat('E').format(controller.timeWorks[index]),
                   style: TextStyle(
                     fontSize: 14,
-                    color: (index == controller.indexSelectedTime.value)
+                    color: controller.isTimeSelected(index: index)
                         ? ColorName.white
                         : ColorName.black,
                   ),
@@ -208,6 +216,7 @@ class MyApp extends StatelessWidget {
     );
   }
 
+  ///Show Avatar User
   Widget viewAvatar() {
     return Container(
       decoration: BoxDecoration(
@@ -237,7 +246,10 @@ class MyApp extends StatelessWidget {
                 builder: (BuildContext context) {
                   return DialogCustomCreateWork(
                     onClickCreate: (work) {
-                      controller.updateWork(index, work);
+                      controller.updateWorkToSchedule(index, work);
+                      work.haveNotice == true
+                          ? resetNotificationTimeWorking(work)
+                          : null;
                     },
                     work: controller.filteredItems[index],
                     isCreate: false,
@@ -251,7 +263,10 @@ class MyApp extends StatelessWidget {
                 motion: const DrawerMotion(),
                 children: [
                   itemActionSlidable(onDelete: (delete) {
-                    delete ? controller.deleteWork(index) : null;
+                    delete
+                        ? handleActionRemoveNotification(
+                            work: controller.filteredItems[index], index: index)
+                        : null;
                   }),
                 ],
               ),
@@ -273,6 +288,19 @@ class MyApp extends StatelessWidget {
     );
   }
 
+  ///Reset Notification Time Working
+  void resetNotificationTimeWorking(Work work) {
+    AndroidAlarmManager.cancel(work.id);
+    scheduleDailyNotification(work: work);
+  }
+
+  ///Handle Remove Notification Time Working
+  void handleActionRemoveNotification({required Work work, required int index}) {
+    AndroidAlarmManager.cancel(work.id);
+    controller.deleteWorkToSchedule(index);
+  }
+
+  ///Create Action Slidable
   Widget itemActionSlidable({required ValueChanged<bool> onDelete}) {
     return CustomSlidableAction(
       onPressed: (context) {
@@ -284,41 +312,6 @@ class MyApp extends StatelessWidget {
         Icons.delete_forever,
         size: 23,
         color: ColorName.white,
-      ),
-    );
-  }
-
-  Widget _builderBottomSheet(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.only(left: 15),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 20),
-          InkWell(
-            onTap: () {
-              Get.back();
-              controller.pickImage();
-            },
-            child: const SizedBox(
-                width: double.infinity,
-                child: Text('Chọn ảnh từ Gallery',
-                    style: TextStyle(fontSize: 16, color: Colors.black))),
-          ),
-          const SizedBox(height: 20),
-          InkWell(
-            onTap: () {
-              Get.back();
-              controller.pickCamera();
-            },
-            child: const SizedBox(
-                width: double.infinity,
-                child: Text('Chọn ảnh từ Camera',
-                    style: TextStyle(fontSize: 16, color: Colors.black))),
-          ),
-          const SizedBox(height: 20),
-        ],
       ),
     );
   }

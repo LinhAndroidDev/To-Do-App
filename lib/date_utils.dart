@@ -68,3 +68,8 @@ Future<Map<String, dynamic>?> readNotificationFromFile() async {
     return null;
   }
 }
+
+bool compareDay(DateTime timeServer, DateTime time) {
+  final DateFormat formatter = DateFormat('yyyy/MM/dd');
+  return formatter.format(timeServer) == formatter.format(time);
+}
