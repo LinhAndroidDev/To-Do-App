@@ -9,7 +9,11 @@ class LocalNotification {
     const AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('@mipmap/ic_launcher');
     final DarwinInitializationSettings initializationSettingsDarwin =
-    DarwinInitializationSettings(onDidReceiveLocalNotification: (id, title, body, payload) => null);
+    DarwinInitializationSettings(
+      requestSoundPermission: true,
+      requestBadgePermission: true,
+      requestAlertPermission: true,
+      onDidReceiveLocalNotification: (id, title, body, payload) async {});
     const LinuxInitializationSettings initializationSettingsLinux =
     LinuxInitializationSettings(defaultActionName: 'Open notification');
     final InitializationSettings initializationSettings = InitializationSettings(
@@ -17,10 +21,11 @@ class LocalNotification {
         iOS: initializationSettingsDarwin,
         linux: initializationSettingsLinux);
     flutterLocalNotificationsPlugin.initialize(initializationSettings,
-        onDidReceiveNotificationResponse: (detail) => null);
+        onDidReceiveNotificationResponse: (detail) async {});
   }
 
   static Future showSimpleNotification({required int id, required String title, required String detail}) async {
+    print('Thông báo mới nhất: title: $title - detail: $detail');
     const AndroidNotificationDetails androidNotificationDetails =
     AndroidNotificationDetails('your channel id', 'your channel name',
         channelDescription: 'your channel description',
@@ -29,7 +34,10 @@ class LocalNotification {
         ticker: 'ticker',
         fullScreenIntent: true,);
     const NotificationDetails notificationDetails =
-    NotificationDetails(android: androidNotificationDetails);
+    NotificationDetails(
+      android: androidNotificationDetails,
+      iOS: DarwinNotificationDetails()
+      );
     await flutterLocalNotificationsPlugin.show(
         id, title, detail, notificationDetails,
         payload: "This is simple notification");

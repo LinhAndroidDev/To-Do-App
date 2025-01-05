@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:alarm/alarm.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,7 +27,8 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
   await LocalNotification.init();
-  await AndroidAlarmManager.initialize();
+  // await AndroidAlarmManager.initialize();
+  // await Alarm.init();
 
   // Kiểm tra và xin quyền notification trước
   if (await Permission.notification.isDenied) {
@@ -34,9 +36,9 @@ void main() async {
   }
 
   // Sau khi xin xong quyền notification, kiểm tra và xin quyền exact alarm
-  if (await Permission.scheduleExactAlarm.isDenied) {
-    await Permission.scheduleExactAlarm.request();
-  }
+  // if (await Permission.scheduleExactAlarm.isDenied) {
+  //   await Permission.scheduleExactAlarm.request();
+  // }
 
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(MyApp());
@@ -111,6 +113,9 @@ class MyApp extends StatelessWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
+          ElevatedButton(onPressed: () {
+            LocalNotification.showSimpleNotification(id: 0, title: 'Thông báo từ IOS', detail: 'Đây là tin nhắn test');
+          }, child: Text('Test thông báo IOS', style: TextStyle(fontSize: 16, color: ColorName.black, fontWeight: FontWeight.bold),)),
           const SizedBox(
             height: 10,
           ),
